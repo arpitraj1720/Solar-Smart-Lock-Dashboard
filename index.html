@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfraGuard Access Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js library for data visualization (ECE Focus) --><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- THEME STYLES --- */
+        :root {
+            /* Light Mode Defaults (Restored) */
+            --bg-primary: #f4f7f9;
+            --bg-card: #ffffff;
+            --text-primary: #1f2937; /* Default Black/Dark text */
+            --text-secondary: #6b7280; /* Default Medium Gray text */
+            --chart-grid: rgba(0, 0, 0, 0.1);
+            --chart-text: #6b7280;
+            --input-text: #1f2937; /* Light Mode: Black Input Text */
+        }
+
+        [data-theme="dark"] {
+            /* Dark Mode Overrides */
+            --bg-primary: #1f2937; 
+            --bg-card: #4A5568;   
+            --text-primary: #f3f4f6; /* White/Light Text */
+            --text-secondary: #9ca3af; /* Soft Gray Text */
+            --chart-grid: rgba(255, 255, 255, 0.1);
+            --chart-text: #ffffff; /* Pure White for chart text in dark mode */
+            --input-text: #1f2937; /* Dark Mode: Black Input Text (for contrast against white input field) */
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .card { 
+            background-color: var(--bg-card);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        /* These base classes ensure all headings and neutral text flip color via the theme variable */
+        .text-gray-800, .text-gray-700 { color: var(--text-primary); }
+        .text-gray-600, .text-gray-500 { color: var(--text-secondary); }
+        
+        /* Log and Status Pill Colors (Fixed for both modes) */
+        .status-pill-ok { background-color: #10b981; } /* Tailwind Green-500 */
+        .status-pill-low { background-color: #f59e0b; } /* Tailwind Amber-500 */
+
+        /* Inner Line/Border Fix */
+        .themed-border-top { border-top: 1px solid var(--chart-grid); }
+
+        /* Log Colors */
+        .success { 
+            background-color: rgba(16, 185, 129, 0.2); 
+        } 
+        .fail { 
+            background-color: rgba(239, 68, 68, 0.2); 
+        }
+        
+        /* Input Text Fix: Force color using CSS variable */
+        #new-uid-input { color: var(--input-text); }
+
+        #analysis-text { white-space: pre-wrap; }
+        
+        /* Language Selector Style */
+        #lang-selector {
+            appearance: none;
+            background-color: var(--bg-card);
+            border: 1px solid var(--text-secondary);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        [data-theme="dark"] #lang-selector {
+             border-color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8" data-theme="light">
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-10 relative">
+            <div class="absolute top-0 left-0">
+                <select id="lang-selector">
+                    <option value="en">English</option>
+                    <option value="hi">हिन्दी (Hindi)</option>
+                    <option value="mr">मराठी (Marathi)</option>
+                </select>
+            </div>
+            
+            <!-- Fixed H1 to use theme color --><h1 class="text-3xl font-bold text-gray-800" style="color: var(--text-primary);" data-i18n="headerTitle">InfraGuard Solar Access System</h1>
+            <p class="text-sm text-gray-500 mt-1" data-i18n="headerSubtitle">IoT Infrastructure & Sustainable Power Diagnostics</p>
+            
+            <!-- Dark Mode Toggle Button --><button id="theme-toggle" class="absolute top-0 right-0 p-2 rounded-full hover:bg-gray-200/50 transition duration-150">
+                <svg id="moon-icon" class="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+                <svg id="sun-icon" class="h-6 w-6 text-yellow-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- NEW: Low Power Warning Banner (Activated when voltage < 3.9V) --><div id="low-power-warning" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-lg hidden" role="alert">
+            <div class="flex items-center">
+                <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.34c.731-1.35 2.515-1.35 3.246 0l4.25 7.825c.731 1.35-.25 3.09-1.745 3.09H5.752c-1.495 0-2.476-1.74-1.745-3.09l4.25-7.825zM10 16a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
+                <p class="font-bold text-sm" data-i18n="alertTitle">CRITICAL POWER ALERT: Low Operational Voltage Detected!</p>
+            </div>
+            <p class="text-sm ml-8" data-i18n="alertMessage">System voltage is below 3.9V. Charging may be insufficient. **Inspect solar panel alignment or battery health immediately.**</p>
+        </div>
+
+        <!-- Status Cards --><div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div id="status-card-system" class="card p-6 rounded-xl border-t-4 border-indigo-500">
+                <p class="text-sm font-medium text-gray-500" data-i18n="statusTitle">System Status</p>
+                <div class="flex items-center mt-2">
+                    <div id="system-status-pill" class="h-3 w-3 rounded-full mr-2 status-pill-ok"></div>
+                    <p id="system-status-text" class="text-xl font-semibold text-gray-700" data-i18n="statusNominal">Nominal</p>
+                </div>
+            </div>
+            
+            <div id="status-card-battery" class="card p-6 rounded-xl border-t-4 border-green-500">
+                <p class="text-sm font-medium text-gray-500">Battery Voltage</p>
+                <!-- Retain English title and value. Value text color flips via JS --><p id="battery-voltage" class="text-2xl font-bold text-green-600 mt-1">4.15V</p>
+            </div>
+            
+            <div id="status-card-time" class="card p-6 rounded-xl border-t-4 border-yellow-500">
+                <p id="last-sync-time-label" class="text-sm font-medium text-gray-500">Last Sync Time</p>
+                <!-- Value text color flips via JS --><p id="last-sync-time" class="text-md font-semibold text-gray-700 mt-1">2025-10-30 13:30:00</p>
+            </div>
+        </div>
+
+        <!-- Battery Voltage Chart (ECE Visualization) --><div class="card p-6 rounded-xl mb-8">
+            <!-- Fixed H2 to use theme color --><h2 class="text-xl font-semibold text-gray-700 mb-4" style="color: var(--text-primary);" data-i18n="chartTitle">Battery Voltage Trend (Last 5 Min)</h2>
+            <div class="h-64">
+                <canvas id="voltageChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Access Control Management (CSE Interactive Feature) --><div class="card p-6 rounded-xl mb-8 border-t-4 border-purple-500">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4" data-i18n="accessControlTitle">Access Control Management</h2>
+            <p class="text-sm text-gray-600 mb-4" data-i18n="accessControlSubtitle">Dynamically manage authorized RFID access tags (UIDs).</p>
+            
+            <!-- Add New User Form --><div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mb-1">
+                <!-- INPUT FIX: Added custom style via CSS variable for text contrast --><input type="text" id="new-uid-input" placeholder="Enter New 8-Digit UID (e.g., A1-B2-C3-D4)"
+                       class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm font-mono"
+                       maxlength="11" data-i18n-placeholder="accessInputPlaceholder">
+                <button id="add-uid-button" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 flex-shrink-0" data-i18n="accessAddButton">
+                    Add Authorized Tag
+                </button>
+            </div>
+            
+            <!-- Confirmation and Error Messages --><div id="add-confirmation-message" class="text-xs text-green-600 font-semibold mb-3 hidden" data-i18n="accessSuccess">Tag successfully added.</div>
+            <div id="invalid-input-message" class="text-xs text-red-600 font-semibold mb-3 hidden" data-i18n="accessErrorFormat">Error: Invalid format. Use XX-XX-XX-XX (e.g., A1-B2-C3-D4).</div>
+            <div id="already-exists-message" class="text-xs text-red-600 font-semibold mb-3 hidden" data-i18n="accessErrorExists">Error: Tag is already authorized.</div>
+
+            <!-- Current Authorized List --><h3 class="text-base font-semibold text-gray-700 mb-2" data-i18n="authorizedListTitle">Authorized Access UIDs:</h3>
+            <div id="authorized-list-container" class="space-y-2">
+                <!-- UIDs will be listed here --></div>
+        </div>
+        
+        <!-- Access Log --><div class="card p-6 rounded-xl mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4" data-i18n="logTitle">Recent Access and Security Logs</h2>
+            <div class="space-y-3 log-container-bg" id="log-container">
+                <p class="text-gray-400" data-i18n="logWaiting">Waiting for first simulated log entry...</p>
+            </div>
+        </div>
+        
+        <!-- Gemini LLM Analysis Tool --><div class="card p-6 rounded-xl">
+            <!-- Fixed H2 to use theme color --><h2 class="text-xl font-semibold text-gray-700 mb-4" style="color: var(--text-primary);" data-i18n="aiTitle">AI-Driven System Diagnostics ✨</h2>
+            <p class="text-sm text-gray-600 mb-4" data-i18n="aiSubtitle">Generate immediate technical analysis for power optimization and security risk mitigation.</p>
+            <button id="analyze-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150" data-i18n="aiButton">
+                ✨ Run Diagnostic & Optimization Report
+            </button>
+            <div id="analysis-results" class="mt-4 p-4 rounded-lg text-sm" style="background-color: var(--bg-primary);">
+                <!-- Analysis output will be placed here --><p id="analysis-text" class="text-base"></p> 
+                <div id="analysis-sources" class="mt-3 themed-border-top pt-2 text-xs text-gray-500 hidden">
+                    <p class="font-bold mb-1" data-i18n="aiSources">Sources:</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for Simulated Updates, Theme Logic & Gemini API Call --><script>
+        // --- DOM Elements ---
+        const BODY = document.body;
+        const LOG_CONTAINER = document.getElementById('log-container');
+        const BATTERY_VOLTAGE = document.getElementById('battery-voltage');
+        const LAST_SYNC_TIME = document.getElementById('last-sync-time');
+        const SYSTEM_STATUS_TEXT = document.getElementById('system-status-text');
+        const SYSTEM_STATUS_PILL = document.getElementById('system-status-pill');
+        const ANALYSIS_RESULTS_DIV = document.getElementById('analysis-results');
+        const ANALYSIS_TEXT = document.getElementById('analysis-text');
+        const ANALYSIS_SOURCES_DIV = document.getElementById('analysis-sources');
+        const ANALYZE_BUTTON = document.getElementById('analyze-button');
+        const ADD_UID_BUTTON = document.getElementById('add-uid-button');
+        const NEW_UID_INPUT = document.getElementById('new-uid-input');
+        const AUTHORIZED_LIST_CONTAINER = document.getElementById('authorized-list-container');
+        const LOW_POWER_WARNING = document.getElementById('low-power-warning');
+        const ADD_CONFIRMATION_MESSAGE = document.getElementById('add-confirmation-message');
+        const INVALID_INPUT_MESSAGE = document.getElementById('invalid-input-message');
+        const ALREADY_EXISTS_MESSAGE = document.getElementById('already-exists-message'); 
+        const THEME_TOGGLE = document.getElementById('theme-toggle');
+        const MOON_ICON = document.getElementById('moon-icon');
+        const SUN_ICON = document.getElementById('sun-icon');
+        const LANG_SELECTOR = document.getElementById('lang-selector'); // New element
+        
+        // --- CHART VARIABLES ---
+        let voltageChart;
+        let voltageHistory = []; 
+        let labelHistory = []; 
+        const MAX_DATA_POINTS = 10; 
+        
+        // --- SIMULATION & DATA VARIABLES ---
+        let simulatedLogs = [];
+        let accessAttemptCount = 0;
+        const UNAUTHORIZED_UID = "99-99-99-99"; 
+        let authorizedUIDs = ["01-02-03-04", "A1-B2-C3-D4"]; 
+        
+        // --- INTERNATIONALIZATION DATA (Simplified) ---
+        const LANG_DATA = {
+            en: {
+                headerTitle: "InfraGuard Solar Access System",
+                headerSubtitle: "IoT Infrastructure & Sustainable Power Diagnostics",
+                statusTitle: "System Status",
+                statusNominal: "Nominal",
+                statusLow: "Low Power",
+                alertTitle: "CRITICAL POWER ALERT: Low Operational Voltage Detected!",
+                alertMessage: "System voltage is below 3.9V. Charging may be insufficient. **Inspect solar panel alignment or battery health immediately.**",
+                chartTitle: "Battery Voltage Trend (Last 5 Min)",
+                accessControlTitle: "Access Control Management",
+                accessControlSubtitle: "Dynamically manage authorized RFID access tags (UIDs).",
+                accessInputPlaceholder: "Enter New 8-Digit UID (e.g., A1-B2-C3-D4)",
+                accessAddButton: "Add Authorized Tag",
+                accessSuccess: "Tag successfully added.",
+                accessErrorFormat: "Error: Invalid format. Use XX-XX-XX-XX (e.g., A1-B2-C3-D4).",
+                accessErrorExists: "Error: Tag is already authorized.",
+                authorizedListTitle: "Authorized Access UIDs:",
+                logTitle: "Recent Access and Security Logs",
+                logWaiting: "Waiting for first simulated log entry...",
+                // FIX: Correcting English Date/Time labels
+                logDate: "Date:",
+                logTime: "Time:",
+                aiTitle: "AI-Driven System Diagnostics ✨",
+                // CHANGED: Removed (ECE) and (CSE) and fixed subtitle
+                aiSubtitle: "Generate immediate technical analysis for power optimization and security risk mitigation.",
+                aiButton: "✨ Run Diagnostic & Optimization Report",
+                aiSources: "Sources:",
+                removeButton: "Remove"
+            },
+            hi: {
+                headerTitle: "सौर पहुँच ताला", // Solar Access Lock
+                headerSubtitle: "IoT व्यवस्था और सौर ऊर्जा की जाँच", // IoT System and Solar Energy Check
+                statusTitle: "सिस्टम की हालत", // System Condition
+                statusNominal: "सामान्य स्थिति", // FIX: Updated to 'सामान्य स्थिति' (Normal Status)
+                statusLow: "चार्ज कम", // Low Charge (Correct)
+                alertTitle: "खतरा! चार्ज कम है!", // Danger! Charge is Low!
+                alertMessage: "सिस्टम वोल्टेज 3.9V से कम है। चार्जिंग काफी नहीं है। **सौर पैनल या बैटरी को तुरंत देखें।**",
+                chartTitle: "बैटरी वोल्टेज ट्रेंड (5 मिनट)",
+                accessControlTitle: "ताला प्रबंध", // Lock Management
+                accessControlSubtitle: "RFID टैग (UID) को जोड़ने/हटाने की सुविधा।", // Facility to add/remove RFID tags (UIDs).
+                accessInputPlaceholder: "नया 8-अंकीय कोड डालें (उदा. A1-B2-C3-D4)",
+                accessAddButton: "टैग जोड़ें",
+                accessSuccess: "टैग जुड़ गया।",
+                accessErrorFormat: "गलती: कोड गलत है। XX-XX-XX-XX में डालें।", // Error: Code is wrong. Enter in XX-XX-XX-XX.
+                accessErrorExists: "गलती: टैग पहले से ही जुड़ा है।",
+                authorizedListTitle: "अधिकृत कोड (UIDs):", // Authorized Codes (UIDs)
+                logTitle: "हाल की गतिविधियाँ और लॉग", // Recent Activities and Logs
+                logWaiting: "पहली गतिविधि का इंतज़ार...", // Waiting for first activity...
+                logDate: "तारीख:",
+                logTime: "समय:",
+                aiTitle: "AI से जाँच ✨", // AI Check
+                // CHANGED: Removed (ECE) and (CSE)
+                aiSubtitle: "पावर और सुरक्षा के लिए तुरंत सुझाव देखें।", // See instant suggestions for Power and Security.
+                aiButton: "✨ जाँच रिपोर्ट देखें",
+                aiSources: "स्रोत:",
+                removeButton: "हटाएँ"
+            },
+            mr: {
+                headerTitle: "सौर प्रवेश लॉक", // Solar Entrance Lock
+                headerSubtitle: "IoT व्यवस्था आणि सौर ऊर्जेची तपासणी", // IoT System and Solar Energy Check
+                statusTitle: "सिस्टमची स्थिती", // System Status
+                statusNominal: "सामान्य स्थिती", // FIX: Updated to 'सामान्य स्थिती' (Normal Status)
+                statusLow: "चार्ज कमी", // Low Charge (Correct)
+                alertTitle: "धोकादायक पॉवर अलर्ट: कमी व्होल्टेज आढळले!", // Dangerous Power Alert: Low Voltage Detected!
+                alertMessage: "सिस्टम व्होल्टेज 3.9V पेक्षा कमी आहे. चार्जिंग अपुरे आहे. **सौर पॅनेल किंवा बॅटरीची त्वरित तपासणी करा.**",
+                chartTitle: "बॅटरी व्होल्टेज ट्रेंड (5 मिनिटे)",
+                accessControlTitle: "लॉक व्यवस्थापन", // Lock Management
+                accessControlSubtitle: "अधिकृत RFID टॅग (UIDs) जोडणे/काढणे.", // Adding/Removing authorized RFID tags (UIDs).
+                accessInputPlaceholder: "नवीन 8-अंकी कोड टाका (उदा. A1-B2-C3-D4)",
+                accessAddButton: "टॅग जोडा",
+                accessSuccess: "टॅग यशस्वी जोडला.",
+                accessErrorFormat: "त्रुटी: कोड चुकीचा आहे. XX-XX-XX-XX मध्ये टाका。", // Error: Code is wrong. Enter in XX-XX-XX-XX.
+                accessErrorExists: "त्रुटी: टॅग आधीच जोडलेला आहे。",
+                authorizedListTitle: "अधिकृत कोड (UIDs):", // Authorized Codes (UIDs)
+                logTitle: "मागील नोंदी आणि सुरक्षा लॉग", // Past Records and Security Logs
+                logWaiting: "पहिल्या नोंदीची वाट पाहत आहे...", // Waiting for first record...
+                logDate: "दिनांक:",
+                logTime: "वेळ:",
+                aiTitle: "AI तपासणी ✨", // AI Check
+                // CHANGED: Removed (ECE) and (CSE)
+                aiSubtitle: "पॉवर आणि सुरक्षा साठी लगेच सूचना मिळवा。", // Get immediate suggestions for Power and Security.
+                aiButton: "✨ तपासणी अहवाल बघा",
+                aiSources: "स्रोत:",
+                removeButton: "काढा"
+            },
+        };
+        
+        let currentLang = localStorage.getItem('language') || 'en';
+
+        // --- GEMINI API CONFIGURATION ---
+        const apiKey = ""; 
+        const modelName = "gemini-2.5-flash-preview-09-2025"; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+        // --- DYNAMIC AI PROMPT GENERATOR ---
+        function getAISystemPrompt(lang) {
+             let langInstruction = 'English';
+             if (lang === 'hi') langInstruction = 'Hindi';
+             if (lang === 'mr') langInstruction = 'Marathi';
+
+             return `You are an experienced technician checking a field system. Analyze the data and give your findings in **two short paragraphs** (under 50 words each). 
+             The final analysis MUST be in ${langInstruction}.
+             The first paragraph should cover **Security (CSE)**: point out any failed access attempts and suggest one practical fix (like rate limiting). 
+             The second paragraph should cover **Power (ECE)**: check the voltage and suggest one simple step to save power or improve solar charging. 
+             Use a casual, direct tone and only bold key technical terms.`;
+        }
+
+        // --- UTILITY: EXPONENTIAL BACKOFF FOR API CALLS ---
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429) { 
+                        const delay = Math.pow(2, i) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        
+        // --- LANGUAGE FUNCTIONS ---
+        function changeLanguage(lang) {
+            if (!LANG_DATA[lang]) return;
+            currentLang = lang;
+            localStorage.setItem('language', lang);
+
+            // Translate all elements with data-i18n attributes
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (LANG_DATA[lang][key]) {
+                    element.textContent = LANG_DATA[lang][key];
+                }
+            });
+
+            // Translate all elements with data-i18n-placeholder attributes
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (LANG_DATA[lang][key]) {
+                    element.setAttribute('placeholder', LANG_DATA[lang][key]);
+                }
+            });
+
+            // --- FIX: Correctly find and translate the current status ---
+            const currentStatusText = SYSTEM_STATUS_TEXT.textContent;
+            let statusKey;
+
+            // Determine if the current status is Nominal or Low Power (use English keys for comparison)
+            if (currentStatusText === LANG_DATA['en'].statusNominal || currentStatusText === LANG_DATA['hi'].statusNominal || currentStatusText === LANG_DATA['mr'].statusNominal) {
+                 statusKey = 'statusNominal';
+            } else if (currentStatusText === LANG_DATA['en'].statusLow || currentStatusText === LANG_DATA['hi'].statusLow || currentStatusText === LANG_DATA['mr'].statusLow) {
+                 statusKey = 'statusLow';
+            } else {
+                // Fallback to Nominal if unsure (e.g., first load)
+                statusKey = 'statusNominal';
+            }
+            
+            // Set the translated status text
+            SYSTEM_STATUS_TEXT.textContent = LANG_DATA[lang][statusKey];
+
+            // Update chart titles/labels
+            if (voltageChart) {
+                // Chart X and Y labels are hardcoded in English in HTML, so we rely on the init to set them once.
+                voltageChart.update();
+            }
+            
+            // Re-render the access list and logs to ensure language consistency
+            renderAuthorizedList();
+            updateDashboard(false); // Re-render logs without generating new data
+        }
+
+
+        // --- THEME LOGIC ---
+        function applyChartTheme(isDark) {
+            // Retrieve current theme colors from the CSS
+            const chartTextColor = getComputedStyle(BODY).getPropertyValue('--chart-text').trim();
+            const chartGridColor = getComputedStyle(BODY).getPropertyValue('--chart-grid').trim();
+
+            if (voltageChart) {
+                // Apply color changes to all text, titles, and gridlines
+                voltageChart.options.scales.y.ticks.color = chartTextColor;
+                voltageChart.options.scales.x.ticks.color = chartTextColor;
+                voltageChart.options.scales.y.grid.color = chartGridColor;
+                voltageChart.options.scales.x.title.color = chartTextColor;
+                voltageChart.options.scales.y.title.color = chartTextColor;
+                
+                // Tooltip colors
+                voltageChart.options.plugins.tooltip.titleColor = chartTextColor;
+                voltageChart.options.plugins.tooltip.bodyColor = chartTextColor;
+                voltageChart.options.plugins.tooltip.backgroundColor = isDark ? 'rgba(55, 65, 81, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+                voltageChart.options.plugins.tooltip.borderColor = isDark ? '#4f46e5' : '#e5e7eb';
+                
+                // Set Chart.js Global defaults for font color
+                Chart.defaults.color = chartTextColor; 
+                Chart.defaults.borderColor = chartGridColor; 
+
+                // Redraw the chart with new colors
+                voltageChart.update();
+            }
+        }
+
+        function setTheme(mode) {
+            const isDark = mode === 'dark';
+            BODY.setAttribute('data-theme', mode);
+            localStorage.setItem('theme', mode);
+
+            MOON_ICON.classList.toggle('hidden', isDark);
+            SUN_ICON.classList.toggle('hidden', !isDark);
+
+            // LOGIC FIX: In light mode, the voltage value and other elements need their original color classes back.
+            if (!isDark) {
+                // LIGHT MODE: Re-apply original hard-coded class colors for high contrast
+                BATTERY_VOLTAGE.classList.add('text-green-600');
+                BATTERY_VOLTAGE.style.color = ''; // Clear inline style set by dark mode
+                
+                // Restore dark gray/black text for labels and headings in light mode
+                document.querySelectorAll('.text-gray-700').forEach(el => el.style.color = '#4b5563'); 
+                document.querySelectorAll('.text-gray-500').forEach(el => el.style.color = '#6b7280'); 
+                document.querySelectorAll('.text-gray-600').forEach(el => el.style.color = '#4b5563');
+            } else {
+                // DARK MODE: Apply theme variables to overwrite hard-coded class colors
+                BATTERY_VOLTAGE.classList.remove('text-green-600');
+                BATTERY_VOLTAGE.style.color = 'var(--text-primary)'; // Set white explicitly for dark mode
+
+                document.querySelectorAll('.text-gray-700').forEach(el => el.style.color = 'var(--text-primary)');
+                document.querySelectorAll('.text-gray-500').forEach(el => el.style.color = 'var(--text-secondary)');
+                document.querySelectorAll('.text-gray-600').forEach(el => el.style.color = 'var(--text-secondary)');
+            }
+
+
+            applyChartTheme(isDark);
+            renderAuthorizedList(); 
+            recolorLogStatus(); // NEW CALL: Force log status color update immediately
+        }
+
+        function toggleTheme() {
+            const currentTheme = BODY.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+        
+        // --- NEW FUNCTION: REAPPLY STATUS COLOR TO LOGS ---
+        function recolorLogStatus() {
+            const currentTheme = BODY.getAttribute('data-theme');
+            const isLight = currentTheme === 'light';
+            
+            document.querySelectorAll('.log-status-text').forEach(span => {
+                const status = span.textContent;
+                
+                let statusTextColor;
+                
+                if (isLight) {
+                    // LIGHT MODE: Restore Green for SUCCESS and Red for FAIL
+                    if (status === 'SUCCESS') statusTextColor = '#10b981'; // Bright Green
+                    else if (status === 'FAIL') statusTextColor = '#ef4444';   // Bright Red
+                    else statusTextColor = 'var(--text-primary)'; // Fallback
+                } else {
+                    // DARK MODE FIX: Use lighter, high-contrast versions of Green/Red
+                    if (status === 'SUCCESS') statusTextColor = '#34D399'; // Lighter Green
+                    else if (status === 'FAIL') statusTextColor = '#F87171';   // Lighter Red
+                    else statusTextColor = 'var(--text-primary)'; // Fallback to white/light gray
+                }
+                
+                span.style.color = statusTextColor;
+            });
+        }
+
+
+        // --- ACCESS CONTROL MANAGEMENT FUNCTIONS (Omitted for brevity) ---
+        function renderAuthorizedList() {
+            AUTHORIZED_LIST_CONTAINER.innerHTML = '';
+            const isDark = BODY.getAttribute('data-theme') === 'dark';
+            
+            if (authorizedUIDs.length === 0) {
+                const p = document.createElement('p');
+                p.className = 'text-sm text-gray-500';
+                p.textContent = LANG_DATA[currentLang].authorizedListTitle.replace(':', ''); // Use a general phrase if list is empty
+                AUTHORIZED_LIST_CONTAINER.appendChild(p);
+            }
+
+            authorizedUIDs.forEach(uid => {
+                const uidDiv = document.createElement('div');
+                uidDiv.className = 'flex items-center justify-between p-2 rounded-lg';
+                // Use theme colors for list item background/text
+                uidDiv.style.backgroundColor = isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6'; 
+                uidDiv.innerHTML = `<span class="font-mono text-sm" style="color: var(--text-primary);">${uid}</span>
+                                    <button data-uid="${uid}" class="remove-uid-btn text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-md transition duration-150">
+                                        ${LANG_DATA[currentLang].removeButton} 
+                                    </button>`;
+                AUTHORIZED_LIST_CONTAINER.appendChild(uidDiv);
+            });
+            
+            document.querySelectorAll('.remove-uid-btn').forEach(button => {
+                button.addEventListener('click', handleRemoveUID);
+            });
+        }
+
+        function handleRemoveUID(event) {
+            const uidToRemove = event.target.getAttribute('data-uid');
+            const confirmationText = LANG_DATA['en'].removeButton.toUpperCase(); // Use English REMOVE for confirmation prompt
+            const promptText = `Type '${confirmationText}' to confirm removal of UID: ${uidToRemove}`;
+            const confirmation = window.prompt(promptText, "CANCEL");
+            if (confirmation && confirmation.toUpperCase() === confirmationText) {
+                authorizedUIDs = authorizedUIDs.filter(uid => uid !== uidToRemove);
+                renderAuthorizedList();
+            }
+        }
+
+        // Helper to hide all feedback messages
+        function hideAllMessages() {
+            ADD_CONFIRMATION_MESSAGE.classList.add('hidden');
+            INVALID_INPUT_MESSAGE.classList.add('hidden');
+            ALREADY_EXISTS_MESSAGE.classList.add('hidden');
+        }
+
+        function handleAddUID() {
+            let newUid = NEW_UID_INPUT.value.trim().toUpperCase();
+            
+            newUid = newUid.replace(/[:\s]/g, '');
+            if (newUid.length === 8) {
+                newUid = newUid.match(/.{1,2}/g).join('-');
+            }
+
+            const uidPattern = /^[0-9A-F]{2}-[0-9A-F]{2}-[0-9A-F]{2}-[0-9A-F]{2}$/;
+
+            // 1. Hide all previous messages
+            hideAllMessages();
+            
+            // 2. Validate format
+            if (!uidPattern.test(newUid)) {
+                INVALID_INPUT_MESSAGE.classList.remove('hidden');
+                NEW_UID_INPUT.value = ''; // Clear input
+                setTimeout(() => { INVALID_INPUT_MESSAGE.classList.add('hidden'); }, 3000);
+                return;
+            }
+            
+            // 3. Check if UID already exists 
+            if (authorizedUIDs.includes(newUid)) {
+                ALREADY_EXISTS_MESSAGE.classList.remove('hidden');
+                NEW_UID_INPUT.value = ''; // Clear input
+                setTimeout(() => { ALREADY_EXISTS_MESSAGE.classList.add('hidden'); }, 3000); 
+                return;
+            }
+
+            // 4. Successful addition
+            authorizedUIDs.push(newUid);
+            renderAuthorizedList();
+            
+            // Clear Input and Show Confirmation
+            NEW_UID_INPUT.value = '';
+            ADD_CONFIRMATION_MESSAGE.classList.remove('hidden');
+            setTimeout(() => {
+                ADD_CONFIRMATION_MESSAGE.classList.add('hidden');
+            }, 3000); 
+        }
+
+
+        // --- SIMULATION DATA GENERATOR (Omitted for brevity) ---
+        function generateSimulatedData() {
+            accessAttemptCount++;
+            let status, uid;
+            let currentTimestamp = new Date();
+            let isoTime = currentTimestamp.toISOString();
+            
+            // Extract Date and Time components
+            const dateStr = isoTime.substring(0, 10);
+            const timeStr = isoTime.substring(11, 19);
+
+            if (accessAttemptCount % 2 === 1) {
+                status = "SUCCESS";
+                const index = Math.floor(Math.random() * authorizedUIDs.length);
+                uid = authorizedUIDs[index] || "01-02-03-04"; 
+            } else {
+                status = "FAIL";
+                uid = UNAUTHORIZED_UID;
+            }
+
+            let voltage;
+            
+            // SIMULATION: Low Power state every 2 minutes (every 4th update)
+            if (accessAttemptCount % 4 === 0) {
+                voltage = (3.80 + (Math.random() * 0.1)).toFixed(2);
+            } else {
+                voltage = (4.15 + (Math.random() * 0.1 - 0.05)).toFixed(2); 
+            }
+            
+            let batteryStatus = (parseFloat(voltage) > 3.9) ? "CHARGING" : "LOW";
+            
+            // --- CHART DATA UPDATE ---
+            voltageHistory.push(parseFloat(voltage));
+            labelHistory.push(timeStr); 
+
+            if (voltageHistory.length > MAX_DATA_POINTS) {
+                voltageHistory.shift();
+                labelHistory.shift();
+            }
+
+            // Update log format to simplify reading
+            simulatedLogs.unshift(`${dateStr},${timeStr},${status},${uid}`);
+            
+            if (simulatedLogs.length > 10) {
+                simulatedLogs.pop();
+            }
+
+            return {
+                battery_v: voltage + "V",
+                battery_status: batteryStatus,
+                timestamp: `${dateStr} ${timeStr}`,
+                logs: simulatedLogs
+            };
+        }
+        
+        // --- CHART INITIALIZATION (Omitted for brevity) ---
+        function initChart() {
+            const ctx = document.getElementById('voltageChart').getContext('2d');
+            
+            // Determine initial theme colors for the chart
+            const initialTheme = localStorage.getItem('theme') || 'light';
+            const isDark = initialTheme === 'dark';
+            
+            // Set initial colors based on theme, using `getComputedStyle` for accuracy
+            const chartTextColor = getComputedStyle(BODY).getPropertyValue('--chart-text').trim();
+            const chartGridColor = getComputedStyle(BODY).getPropertyValue('--chart-grid').trim();
+
+            // Set Chart.js Global defaults for font color
+            Chart.defaults.color = chartTextColor; 
+            Chart.defaults.borderColor = chartGridColor; 
+
+            voltageChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labelHistory,
+                    datasets: [{
+                        label: 'Voltage (V)', // HARDCODED ENGLISH LABEL
+                        data: voltageHistory,
+                        borderColor: '#4f46e5',
+                        backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.4,
+                        pointRadius: 3,
+                        borderWidth: 2,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 3.8, 
+                            max: 4.25, 
+                            title: { display: true, text: 'Voltage (V)', color: chartTextColor }, // HARDCODED ENGLISH LABEL
+                            ticks: { color: chartTextColor },
+                            grid: { color: chartGridColor }
+                        },
+                        x: {
+                            title: { display: true, text: 'Time', color: chartTextColor }, // HARDCODED ENGLISH LABEL
+                            ticks: { color: chartTextColor },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            mode: 'index', 
+                            intersect: false,
+                            titleColor: chartTextColor,
+                            bodyColor: chartTextColor,
+                            // FIX 2: Removed erroneous semicolon from backgroundColor
+                            backgroundColor: isDark ? 'rgba(55, 65, 81, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                            borderColor: isDark ? '#4f46e5' : '#e5e7eb',
+                            borderWidth: 1,
+                        },
+                    }
+                }
+            });
+        }
+
+
+        // --- UPDATE DASHBOARD FUNCTION ---
+        function updateDashboard(generateNewData = true) {
+            const data = generateNewData ? generateSimulatedData() : { logs: simulatedLogs };
+            
+            // Only update cards if generating new data
+            if (generateNewData) {
+                BATTERY_VOLTAGE.textContent = data.battery_v;
+                LAST_SYNC_TIME.textContent = data.timestamp;
+                
+                const isLowPower = data.battery_status === 'LOW';
+                const statusKey = isLowPower ? 'statusLow' : 'statusNominal';
+                SYSTEM_STATUS_TEXT.textContent = LANG_DATA[currentLang][statusKey];
+
+                SYSTEM_STATUS_PILL.className = isLowPower
+                    ? 'h-3 w-3 rounded-full mr-2 status-pill-low' 
+                    : 'h-3 w-3 rounded-full mr-2 status-pill-ok';
+                
+                if (isLowPower) {
+                    LOW_POWER_WARNING.classList.remove('hidden');
+                } else {
+                    LOW_POWER_WARNING.classList.add('hidden');
+                }
+            }
+
+            // 3. Update Logs
+            LOG_CONTAINER.innerHTML = '';
+            data.logs.forEach(log => {
+                const [date, time, status, uid] = log.split(',');
+                const logEntry = document.createElement('div');
+                logEntry.className = 'p-3 rounded-lg text-sm ' + (status === 'SUCCESS' ? 'success' : 'fail');
+                
+                // The text color will be fixed by the recolorLogStatus call
+                
+                logEntry.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold log-status-text">${status}</span>
+                        <span class="font-mono text-xs" style="color: var(--text-primary);">${uid}</span>
+                    </div>
+                    <div class="text-xs mt-1" style="color: var(--text-secondary);">
+                        ${LANG_DATA[currentLang].logDate} ${date} | ${LANG_DATA[currentLang].logTime} ${time}
+                    </div>
+                `;
+                LOG_CONTAINER.appendChild(logEntry);
+            });
+            
+            // Recolor logs here so the instant display has the correct color.
+            recolorLogStatus(); 
+            
+            // 4. Update Chart
+            if (voltageChart) {
+                voltageChart.data.labels = labelHistory;
+                voltageChart.data.datasets[0].data = voltageHistory;
+                
+                const isDark = BODY.getAttribute('data-theme') === 'dark';
+                applyChartTheme(isDark);
+            }
+        }
+
+        // --- HELPER FUNCTION: Basic Markdown to HTML Converter (Omitted for brevity) ---
+        function markdownToHtml(markdown) {
+            let html = markdown;
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\n\n/g, '<p class="mt-2 mb-2">'); 
+            html = html.replace(/\n/g, ' '); 
+            html = html.replace(/<p class="mt-2 mb-2"> /g, '<p class="mt-2 mb-2">'); 
+            return html;
+        }
+
+        // --- GEMINI LLM ANALYSIS FUNCTION (FIXED) ---
+        async function callGeminiAnalysis() {
+            // FIX 1: Check if the apiKey is truly empty before proceeding
+            if (!apiKey || apiKey.trim() === "") {
+                ANALYZE_BUTTON.disabled = false;
+                ANALYSIS_RESULTS_DIV.classList.remove('hidden');
+                ANALYSIS_TEXT.innerHTML = `<div class="text-red-500 font-bold">Error: Gemini API Key Missing.</div>
+                <p class="text-xs mt-1">Please ensure the Canvas environment provides the key for the API call to work.</p>`;
+                ANALYZE_BUTTON.textContent = LANG_DATA[currentLang].aiButton;
+                return;
+            }
+
+            ANALYZE_BUTTON.disabled = true;
+            ANALYZE_BUTTON.textContent = LANG_DATA[currentLang].aiButton.replace('✨ ', '').replace('Report', '...');
+            ANALYSIS_RESULTS_DIV.classList.remove('hidden');
+            ANALYSIS_TEXT.innerHTML = `<div class="animate-pulse text-indigo-500">${LANG_DATA[currentLang].aiProcessing || 'Processing data and generating report...'}</div>`;
+            ANALYSIS_SOURCES_DIV.classList.add('hidden');
+            
+            const currentBatteryV = BATTERY_VOLTAGE.textContent;
+            const currentStatus = SYSTEM_STATUS_TEXT.textContent;
+            const logDetails = simulatedLogs.join('\n');
+
+            const systemPrompt = getAISystemPrompt(currentLang);
+            
+            // NOTE: The userQuery is sent in English, which is what the system prompt requires for accurate technical analysis.
+            const userQuery = `Current System Status: ${currentStatus}. Battery Voltage: ${currentBatteryV}. 
+            Recent Access Log (Timestamp, Status, UID):\n${logDetails}\n\n
+            Provide a two-point summary: 1) Security risk assessment and suggestion. 2) Power optimization suggestion.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }, 
+                tools: [{ "google_search": {} }],
+            };
+
+            try {
+                const response = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    let text = candidate.content.parts[0].text;
+                    
+                    ANALYSIS_TEXT.innerHTML = markdownToHtml(text);
+                    
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+                    // FIX 3: Corrected variable name from groundingAttributions to groundingMetadata.groundingAttributions
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    if (sources.length > 0) {
+                        ANALYSIS_SOURCES_DIV.classList.remove('hidden');
+                        ANALYSIS_SOURCES_DIV.innerHTML = `<p class="font-bold mb-1">${LANG_DATA[currentLang].aiSources}:</p>`;
+                        const ul = document.createElement('ul');
+                        ul.className = 'list-disc list-inside space-y-1';
+                        sources.forEach(source => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<a href="${source.uri}" target="_blank" class="text-indigo-600 hover:underline">${source.title}</a>`;
+                            ul.appendChild(li);
+                        });
+                        ANALYSIS_SOURCES_DIV.appendChild(ul);
+                    } else {
+                        ANALYSIS_SOURCES_DIV.classList.add('hidden');
+                    }
+
+                } else {
+                    // Check for blocked content or other API-side errors
+                    const blockReason = result.candidates?.[0]?.safetyRatings?.[0]?.probability || "Unknown Error";
+                    ANALYSIS_TEXT.textContent = `Error: Could not retrieve analysis. Reason: ${blockReason}`;
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                ANALYSIS_TEXT.textContent = `Error during analysis: Check browser console for details.`;
+            } finally {
+                ANALYZE_BUTTON.disabled = false;
+                ANALYZE_BUTTON.textContent = LANG_DATA[currentLang].aiButton;
+            }
+        }
+
+        // Initialize dashboard and attach events
+        window.onload = function() {
+            // 1. Set Theme
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else {
+                setTheme('light'); 
+            }
+
+            // 2. Set Language
+            const savedLang = localStorage.getItem('language') || 'en';
+            LANG_SELECTOR.value = savedLang;
+            changeLanguage(savedLang);
+
+            // 3. Init other components
+            initChart();
+            renderAuthorizedList(); 
+            updateDashboard();
+            setInterval(() => updateDashboard(true), 30000); 
+            
+            // 4. Attach Events
+            ANALYZE_BUTTON.addEventListener('click', callGeminiAnalysis);
+            ADD_UID_BUTTON.addEventListener('click', handleAddUID);
+            THEME_TOGGLE.addEventListener('click', toggleTheme);
+            LANG_SELECTOR.addEventListener('change', (e) => changeLanguage(e.target.value));
+            
+            NEW_UID_INPUT.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    handleAddUID();
+                }
+            });
+        };
+    </script>
+</body>
+</html>
